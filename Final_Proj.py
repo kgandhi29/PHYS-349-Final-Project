@@ -172,7 +172,30 @@ class System():
         for i in range(self.N):
             ax.plot(positions[:,i,0], positions[:,i,1], positions[:,i,2])
         plt.show()
-          
+
+    def phase_plot(self, traj):
+        fig, ax = plt.subplots(1,3, figsize=(15,5))
+
+        positions = traj[:,:,:3]
+        velocities = traj[:,:,3:]
+
+        for body in range(self.N):
+            ax[0].plot(positions[:,body,0], velocities[:,body,0])
+            ax[1].plot(positions[:,body,1], velocities[:,body,1])
+            ax[2].plot(positions[:,body,2], velocities[:,body,2])
+
+        ax[0].set_title('Phase plot - X vs Vx')
+        ax[1].set_title('Phase plot - Y vs Vy')
+        ax[2].set_title('Phase plot - Z vs Vz')
+
+        ax[0].set_xlabel('X (AU)')
+        ax[0].set_ylabel('Vx (AU/yr)')
+        ax[1].set_xlabel('Y (AU)')
+        ax[1].set_ylabel('Vy (AU/yr)')
+        ax[2].set_xlabel('Z (AU)')
+        ax[2].set_ylabel('Vz (AU/yr)')
+        plt.show()
+
     def Animate(self):
         return None
     
@@ -211,7 +234,9 @@ ptraj4 = es.leapfrog(np.linspace(0,10,1000), es.acc_2)
 te = time.time()
 print("Leapfrog Time for acc_2: ", te - ts)
 
-es.plot(ptraj)
+es.phase_plot(ptraj)
+
+es.phase_plot(ptraj4)
 
 #The x and v returned from the leapfrog method do not agree on time
 #   - x is at full step, v is at half step
