@@ -1,6 +1,7 @@
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+import time
 
 
 
@@ -36,30 +37,7 @@ class System():
         else:
             self.G = 6.67430e-11
 
-    def dpdt(self, p, t):
-        positions = p[:,:3]
-        velocities = p[:,3:]
-
-        # Vectorized force calculation
-        pos_i = positions[:, np.newaxis, :]  # (N, 1, 3)
-        pos_j = positions[np.newaxis, :, :]  # (1, N, 3)
-        r_vec = pos_j - pos_i  # (N, N, 3)
-        r = np.linalg.norm(r_vec, axis=2)  # (N, N)
-        
-        # Sets r=0 to inf to avoid division by zero in acceleration calculation
-        r = np.where(r == 0, np.inf, r)
-        
-        # Shape (N, N, 3)
-        acc_matrix = self.G * self.masses[np.newaxis, :, np.newaxis] * r_vec / (r[:, :, np.newaxis]**2 + self.epsilon**2)**(3/2)
-        
-        # Sum over j (axis=1) to get total acceleration for each i
-        atot = np.sum(acc_matrix, axis=1)  #shape (N, 3)
-        
-        dpdt = np.concatenate((velocities, atot), axis = 1)
-
-        return dpdt  
-
-    def dpdt2(self, pi, t):
+    def acc(self, pi, t):
 
         atot = np.zeros((self.N,3))
 
@@ -75,70 +53,114 @@ class System():
 
         return atot
     
-    def rk4(self, t):
-        dt = t[1] - t[0]   
-        dpdt = self.dpdt 
-        
-        p = np.concatenate((self.positions, self.velocities), axis =1)  #should be shape (N,6)
-        
-        k1 = dt * dpdt(p, t[0])
-        k2 = dt * dpdt(p + k1/2, t[0] + dt/2)
-        k3 = dt * dpdt(p + k2/2, t[0] + dt/2)
-        k4 = dt * dpdt(p + k3, t[0] + dt)
+    def acc_2(self, pi, t):
+        #Does vectorized operations, should be faster for larger N, but slower for small N due to overhead of vectorization
+        pos_i = pi[:, np.newaxis, :]  # (N, 1, 3)
+        pos_j = pi[np.newaxis, :, :]  # (1, N, 3)
+        r_vec = pos_j - pos_i  # (N, N, 3)
 
-        pr = np.reshape(p,(-1,6))
-        traj = []
-        traj.append(pr)
-        
-        for i in range(1, len(t)):
-            term2 = 1/6 * (k1 + 2*k2 + 2*k3 + k4)
-            p = p + term2
-            
-            k1 = dt * dpdt(p, t[i])
-            k2 = dt * dpdt(p + k1/2, t[i] + dt/2)
-            k3 = dt * dpdt(p + k2/2, t[i] + dt/2)
-            k4 = dt * dpdt(p + k3, t[i] + dt)
-            
-            pr = np.reshape(p,(-1,6))
-            traj.append(copy.copy(pr))
+        r = np.linalg.norm(r_vec, axis=2)  # (N, N)
+        r = np.where(r == 0, np.inf, r)
+        acc_matrix = self.G * self.masses[np.newaxis, :, np.newaxis] * r_vec / (r[:, :, np.newaxis]**2 + self.epsilon**2)**(3/2)
+        atot = np.sum(acc_matrix, axis=1)  #shape (N, 3)
 
-        traj = np.array(traj)  #shape (len(t), N, 6)
-            
-        return np.array(traj)
+        return atot
     
-    def leapfrog(self, t):
+    def rk4(self, t, func = None):
         """This function"""
-        ptraj = []
-        vtraj = []
+        dt = t[1] - t[0]   
+        dpdt = func
+
+        if dpdt is None:
+            dpdt = self.acc_2
+
+        x = self.positions
+        v = self.velocities
+
+        k1v  = dt * dpdt(x, t[0])
+        k1x = dt * v
+
+        k2v = dt * dpdt(x + k1x/2, t[0] + dt/2)
+        k2x = dt * (v + k1v/2) 
+
+        k3v = dt * dpdt(x + k2x/2, t[0] + dt/2)
+        k3x = dt * (v + k2v/2)
+
+        k4v = dt * dpdt(x + k3x, t[0] + dt)
+        k4x = dt * (v + k3v)
+
+        #Allocating space for trajectory
+        xtraj = np.zeros((len(t), self.N, 3))
+        vtraj = np.zeros((len(t), self.N, 3))
+        
+        #Setting initial position and velocity
+        xtraj[0] = x
+        vtraj[0] = v
+
+        for i in range(1, len(t)):
+            term2x = 1/6 * (k1x + 2*k2x + 2*k3x + k4x)
+            term2v = 1/6 * (k1v + 2*k2v + 2*k3v + k4v)
+
+            x = x + term2x
+            v = v + term2v
+            
+            k1v  = dt * dpdt(x, t[i])
+            k1x = dt * v
+
+            k2v = dt * dpdt(x + k1x/2, t[i] + dt/2)
+            k2x = dt * (v + k1v/2) 
+
+            k3v = dt * dpdt(x + k2x/2, t[i] + dt/2)
+            k3x = dt * (v + k2v/2)
+
+            k4v = dt * dpdt(x + k3x, t[i] + dt)
+            k4x = dt * (v + k3v)
+
+            xtraj[i] = x
+            vtraj[i] = v
+
+        ptraj = np.concatenate((xtraj, vtraj), axis = 2)
+            
+        return ptraj
+    
+    def leapfrog(self, t, func = None):
+        """This function"""
         dt = t[1] - t[0]
-        p = self.positions
-        v = self.velocities     
-        a = self.dpdt2(p, t)
+        x = self.positions
+        v = self.velocities 
+
+        dpdt = func
+
+        if dpdt is None:
+            dpdt = self.acc_2
+
+        a = dpdt(x, t[0])
 
         v_half = v + a * dt / 2
 
-        ptraj.append(copy.copy(p))
-        vtraj.append(copy.copy(v_half))
+        #Allocating space for trajectory
+        xtraj = np.zeros((len(t), self.N, 3))
+        vtraj = np.zeros((len(t), self.N, 3))
+
+        #Setting initial position and velocity (initial v_half)
+        xtraj[0] = x
+        vtraj[0] = v_half
 
         for i in range(1, len(t)):
 
-            p = p + v_half * dt
-
-            ptraj.append(copy.copy(p))
-
-            a = self.dpdt2(p, t)
+            x = x + v_half * dt
+            a = dpdt(x, t)
             v_half = v_half + a * dt
 
-            vtraj.append(copy.copy(v_half))
+            xtraj[i] = x
+            vtraj[i] = v_half
 
-        ptraj = np.array(ptraj)
-        vtraj = np.array(vtraj)
+        ptraj = np.concatenate((xtraj, vtraj), axis = 2)
 
-        return ptraj, vtraj
+        return ptraj
     
     def plot(self, traj, elev = 90, azim = -90):
 
-        #setup 3d axis
         fig, ax = plt.subplots(subplot_kw={'projection': '3d'})
         ax.set_xlabel('X(AU)')
         ax.set_ylabel('Y(AU)')
@@ -167,23 +189,37 @@ earth = Mass(3.00274e-6, np.array([1,0,0]), np.array([0,2*np.pi,0]))
 
 es = System([sun,earth])
 
-ptraj = es.rk4(np.linspace(0,1,1000))
+#test timing of dpdt2 and dpdt3
 
-xtraj, vtraj = es.leapfrog(np.linspace(0,10,1000))
+ts = time.time()
+ptraj = es.rk4(np.linspace(0,1,1000), es.acc)
+te = time.time()
+print("Rk4 Time for acc: ", te - ts)
 
-ptraj2 = np.concatenate((xtraj, vtraj), axis = 2)
-es.plot(ptraj2)
+ts = time.time()
+ptraj3 = es.rk4(np.linspace(0,1,1000), es.acc_2)
+te = time.time()
+print("Rk4 Time for acc_2: ", te - ts)
 
+ts = time.time()
+ptraj2 = es.leapfrog(np.linspace(0,10,1000), es.acc)
+te = time.time()
+print("Leapfrog Time for acc: ", te - ts)
 
-#1. Seperate x and v in rk4, adjust, then combine dpdt functions into one (so it is vectorized and returns the same shape (N,3))
+ts = time.time()
+ptraj4 = es.leapfrog(np.linspace(0,10,1000), es.acc_2)
+te = time.time()
+print("Leapfrog Time for acc_2: ", te - ts)
 
-#2. Combine xtraj and vtraj at the end of leapfrog, even though they don't agree on time
+es.plot(ptraj)
 
-#3. Average out half step velocites to get full step and then concatenate with positions to get same shape as rk4 traj.
-
+#The x and v returned from the leapfrog method do not agree on time
+#   - x is at full step, v is at half step
+#   - Either leave it, or average out the half step v to get time agreement with x
+#   - Also, the initial velocity is left out (vtraj only store v_half)
 
 # - Animation with matplotlib FuncAnimation.
-#   - Dots at end of line
+#   - Dots at end of lines
 
 # - Make more dynamic with units
 #   - Adjust labels on plot
