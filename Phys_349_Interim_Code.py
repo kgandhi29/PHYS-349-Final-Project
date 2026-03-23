@@ -75,7 +75,7 @@ class System():
         return atot
     
     def rk4(self, t, acc_func = None):
-        """This function"""
+        """This function solves the motion of a system of masses using the Runge-Kutta 4th order method"""
         dt = t[1] - t[0]   
 
         if acc_func is None:
@@ -135,7 +135,7 @@ class System():
         return ptraj
     
     def leapfrog(self, t, acc_func = None):
-        """This function"""
+        """This function solves the motion of a system of masses using the leapfrog method."""
         dt = t[1] - t[0]
 
         x = self.positions
@@ -178,7 +178,7 @@ class System():
         return ptraj
     
     def plot(self, elev = 90, azim = -90):
-
+        """This function plots a trajectory using matplotlib in 3d. The view angle can be altered using elev and azim input parameters"""
         if self.trajectory is None:
             #may just run one of them automatically later, instead of raising an error
             raise ValueError("No trajectory found. Run rk4 or leapfrog to generate trajectory before plotting.")
@@ -196,7 +196,7 @@ class System():
         plt.show()
 
     def _init_animate(self):
-        """This function"""
+        """This function sets the initial objects to be animated"""
         for line, pt in zip(self.lines, self.pts):
             line.set_data([], [])
             line.set_3d_properties([])
@@ -207,7 +207,7 @@ class System():
         return self.lines + self.pts
     
     def _Animate(self, itr):
-
+        """This function draws lines and points for the masses in the system up to index itr."""
         #shape (tmax, N, 3)
         positions = self.trajectory[:,:,:3]
 
