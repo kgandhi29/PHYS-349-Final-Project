@@ -16,6 +16,13 @@ It is not recommended to run the Simulate() function as save or display the simu
 The efficiency and accuracy cell at the bottom is what should be run if you want to quickly check that the method work. Ensure the Earth-Sun
 
 ## nbody.ipynb
+Includes a System Class that handles the solving and animation of the system defined with a list of Mass class objects.
 
+There are a variety of functions to build the galaxy system and three body system
+
+Then there are a bunch of analysis cells that are using the integrators and simulate() function.
 
 ## alternative_nbody.ipynb
+
+Used a different acceleration function
+only plotted trajectory
