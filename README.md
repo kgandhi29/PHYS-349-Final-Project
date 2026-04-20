@@ -26,3 +26,4 @@ Then there are a bunch of analysis cells that are using the integrators and simu
 
 Used a different acceleration function
 only plotted trajectory
+Was happy the original functions so they were not changed much afterwards
